@@ -7,4 +7,4 @@ billing_chain = billing_prompt.partial(
     issue_types=enum_values(BillingIssueType),
     payment_statuses=enum_values(PaymentStatus),
     intents=enum_values(CustomerIntent),
-) | model.with_structured_output(BillingAnalysis)
+) | model.with_structured_output(BillingAnalysis, method="function_calling")

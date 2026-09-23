@@ -10,7 +10,7 @@ class Settings(BaseSettings):
 
     # Required config - no default, so the app fails immediately (not mid-request)
     # if these are missing from .env.
-    google_api_key: str = Field(alias="GOOGLE_API_KEY", min_length=1)
+    openrouter_api_key: str = Field(alias="OPENROUTER_API_KEY", min_length=1)
     model_code: str = Field(alias="MODEL_CODE", min_length=1)
 
     model_config = SettingsConfigDict(

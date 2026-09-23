@@ -1,8 +1,9 @@
-from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_openai import ChatOpenAI
 from app.config.settings import settings
 
-model = ChatGoogleGenerativeAI(
-    model = settings.model_code,
-    google_api_key=settings.google_api_key,
+model = ChatOpenAI(
+    model=settings.model_code,
+    api_key=settings.openrouter_api_key,
+    base_url="https://openrouter.ai/api/v1",
     temperature=0,
 )

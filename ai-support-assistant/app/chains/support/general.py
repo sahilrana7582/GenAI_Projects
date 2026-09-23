@@ -6,4 +6,4 @@ from app.prompts.general import general_prompt
 general_chain = general_prompt.partial(
     issue_types=enum_values(GeneralIssueType),
     intents=enum_values(CustomerIntent),
-) | model.with_structured_output(GeneralAnalysis)
+) | model.with_structured_output(GeneralAnalysis, method="function_calling")

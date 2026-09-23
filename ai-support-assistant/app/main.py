@@ -22,11 +22,11 @@ app.add_exception_handler(
 
 @app.get("/health")
 async def health_check():
-
     return {
         "status": "UP",
         "service": settings.app_name,
         "version": settings.app_version,
+        "model_code": settings.model_code,
     }
 
 
