@@ -5,7 +5,7 @@ import logging
 from langchain_google_genai import ChatGoogleGenerativeAI
 from pydantic import BaseModel, Field
 from langchain_core.prompts import PromptTemplate
-import os 
+import os
 
 # Load .env
 load_dotenv()

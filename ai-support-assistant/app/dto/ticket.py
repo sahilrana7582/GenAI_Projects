@@ -18,3 +18,10 @@ class TicketResponse(BaseModel):
     sentiment: TicketSentiment
     priority: TicketPriority
     suggested_action: str    
+
+class TicketAnalysisResponse(BaseModel):
+    category: TicketCategory
+    summary: str = Field(description="The summary of the overall processing.")
+    priority: TicketPriority
+    sentiment: TicketSentiment
+    suggested_action: str = Field(description="The suggested best course of action for the user to resolve the issue he is facing")
