@@ -1,0 +1,116 @@
+# ============================================================
+# Root .gitignore for genai — applies to every project/subfolder
+# (langchainprac, Advanced LLMOps, RAG, etc.)
+# ============================================================
+
+# --- Secrets & credentials (never commit these) ---
+.env
+.env.*
+!.env.example
+*.env
+*secret*
+*credential*
+*credentials*
+*password*
+service-account*.json
+gcp-*.json
+*-key.json
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+*.ppk
+id_rsa*
+id_ed25519*
+id_ecdsa*
+.aws/
+.gcloud/
+.azure/
+.netrc
+.npmrc
+.pypirc
+
+# Framework-specific secret files
+.streamlit/secrets.toml
+.chainlit/secrets.toml
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+ENV/
+*.egg-info/
+.eggs/
+build/
+dist/
+.installed.cfg
+.Python
+pip-log.txt
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.tox/
+.coverage
+.coverage.*
+htmlcov/
+
+# --- Jupyter ---
+.ipynb_checkpoints/
+*.nbconvert.ipynb
+
+# --- LLM / LLMOps / RAG artifacts ---
+# Vector stores & embedding indexes
+*.faiss
+*.index
+chroma_db/
+.chroma/
+faiss_index/
+vectorstore/
+vector_store/
+qdrant_storage/
+
+# Model weights & large binaries (use Git LFS / remote storage instead)
+*.bin
+*.gguf
+*.safetensors
+*.ckpt
+*.pt
+*.pth
+*.onnx
+models/
+checkpoints/
+
+# LangChain / LangSmith / experiment tracking caches
+.langchain/
+.langsmith/
+wandb/
+mlruns/
+mlartifacts/
+.cache/
+
+# --- Node (in case any project uses JS tooling) ---
+node_modules/
+.next/
+out/
+
+# --- Logs & temp files ---
+*.log
+logs/
+*.tmp
+*.bak
+*.swp
+
+# --- Databases (local dev only) ---
+*.sqlite3
+*.db
+
+# --- OS / Editor junk ---
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.iml
