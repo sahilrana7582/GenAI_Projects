@@ -36,6 +36,23 @@ class VectorStoreService:
         )
 
     def retrieve(self, video_id: str, query: str, top_k: int) -> RetrieveResponse:
+        documents = self.search_documents(video_id=video_id, query=query, top_k=top_k)
+
+        results = [
+            RetrievedChunk(
+                chunk_index=document.metadata.get("chunk_index", -1),
+                text=document.page_content,
+            )
+            for document in documents
+        ]
+
+        return RetrieveResponse(
+            video_id=video_id,
+            query=query,
+            results=results,
+        )
+
+    def search_documents(self, video_id: str, query: str, top_k: int) -> List[Document]:
         store_path = self._store_path(video_id)
 
         if not os.path.isdir(store_path):
@@ -58,27 +75,13 @@ class VectorStoreService:
                     "lambda_mult": 0.5,
                 },
             )
-            documents = retriever.invoke(query)
+            return retriever.invoke(query)
         except VectorStoreNotFoundException:
             raise
         except Exception as exc:
             raise VectorStoreException(
                 message=f"Failed to retrieve chunks for video '{video_id}'"
             ) from exc
-
-        results = [
-            RetrievedChunk(
-                chunk_index=document.metadata.get("chunk_index", -1),
-                text=document.page_content,
-            )
-            for document in documents
-        ]
-
-        return RetrieveResponse(
-            video_id=video_id,
-            query=query,
-            results=results,
-        )
 
     def _store_path(self, video_id: str) -> str:
         return os.path.join(VECTOR_STORE_DIR, video_id)
