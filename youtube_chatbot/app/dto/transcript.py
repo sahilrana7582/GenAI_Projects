@@ -7,3 +7,9 @@ class TranscriptResponse(BaseModel):
     language_code: str = Field(description="Language code of the transcript, e.g. 'en'")
     is_generated: bool = Field(description="Whether the transcript was auto-generated")
     transcript: str = Field(description="Full transcript text")
+    chunk_count: int = Field(description="Number of chunks the transcript splits into")
+
+
+class TranscriptChunkCountResponse(BaseModel):
+    video_id: str = Field(description="YouTube video ID")
+    chunk_count: int = Field(description="Number of chunks the transcript splits into")

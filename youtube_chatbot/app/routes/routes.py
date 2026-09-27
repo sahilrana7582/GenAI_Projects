@@ -2,7 +2,7 @@ from typing import List
 
 from fastapi import APIRouter, Query
 
-from app.dto.transcript import TranscriptResponse
+from app.dto.transcript import TranscriptChunkCountResponse, TranscriptResponse
 from app.services.transcript_service import TranscriptService
 
 
@@ -23,3 +23,14 @@ def get_video_transcript(
     ),
 ):
     return transcript_service.get_transcript(video_id=video_id, languages=languages)
+
+
+@router.get("/chunk", response_model=TranscriptChunkCountResponse)
+def get_video_transcript_chunk_count(
+    video_id: str = Query(..., min_length=1, description="YouTube video ID"),
+    languages: List[str] = Query(
+        default=["en"],
+        description="Preferred transcript languages, in priority order",
+    ),
+):
+    return transcript_service.get_transcript_chunk_count(video_id=video_id, languages=languages)
