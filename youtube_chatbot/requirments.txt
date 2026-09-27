@@ -3,6 +3,10 @@ uvicorn[standard]
 langchain
 langchain-openai
 langchain-community
+langchain-huggingface
+sentence-transformers
 python-dotenv
 pydantic
 pydantic-settings
+youtube-transcript-api
+
