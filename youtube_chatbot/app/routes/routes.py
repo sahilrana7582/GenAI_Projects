@@ -3,7 +3,7 @@ from typing import List
 from fastapi import APIRouter, Query
 
 from app.dto.transcript import TranscriptChunksResponse, TranscriptResponse
-from app.dto.vectorstore import VectorizeRequest, VectorizeResponse
+from app.dto.vectorstore import RetrieveRequest, RetrieveResponse, VectorizeRequest, VectorizeResponse
 from app.services.transcript_service import TranscriptService
 from app.services.vector_store_service import VectorStoreService
 
@@ -43,4 +43,11 @@ def get_video_transcript_chunks(
 def vectorize_video_chunks(request: VectorizeRequest):
     return vector_store_service.vectorize_chunks(
         video_id=request.video_id, chunks=request.chunks
+    )
+
+
+@router.post("/retrieve", response_model=RetrieveResponse)
+def retrieve_video_chunks(request: RetrieveRequest):
+    return vector_store_service.retrieve(
+        video_id=request.video_id, query=request.query, top_k=request.top_k
     )

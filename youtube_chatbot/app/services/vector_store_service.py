@@ -5,8 +5,8 @@ from langchain_community.vectorstores import FAISS
 from langchain_core.documents import Document
 
 from app.core.llm import embedding_model
-from app.dto.vectorstore import VectorizeResponse
-from app.exceptions.vectorstore import VectorStoreException
+from app.dto.vectorstore import RetrievedChunk, RetrieveResponse, VectorizeResponse
+from app.exceptions.vectorstore import VectorStoreException, VectorStoreNotFoundException
 
 VECTOR_STORE_DIR = "vector_store"
 
@@ -26,7 +26,7 @@ class VectorStoreService:
                 message=f"Failed to embed and store chunks for video '{video_id}'"
             ) from exc
 
-        store_path = os.path.join(VECTOR_STORE_DIR, video_id)
+        store_path = self._store_path(video_id)
         vector_store.save_local(store_path)
 
         return VectorizeResponse(
@@ -34,3 +34,51 @@ class VectorStoreService:
             chunk_count=len(chunks),
             vector_store_path=store_path,
         )
+
+    def retrieve(self, video_id: str, query: str, top_k: int) -> RetrieveResponse:
+        store_path = self._store_path(video_id)
+
+        if not os.path.isdir(store_path):
+            raise VectorStoreNotFoundException(
+                message=f"No vector store found for video '{video_id}'. "
+                "Run /video/vectorize for this video first."
+            )
+
+        try:
+            vector_store = FAISS.load_local(
+                store_path,
+                embedding_model,
+                allow_dangerous_deserialization=True,
+            )
+            retriever = vector_store.as_retriever(
+                search_type="mmr",
+                search_kwargs={
+                    "k": top_k,
+                    "fetch_k": max(20, top_k * 4),
+                    "lambda_mult": 0.5,
+                },
+            )
+            documents = retriever.invoke(query)
+        except VectorStoreNotFoundException:
+            raise
+        except Exception as exc:
+            raise VectorStoreException(
+                message=f"Failed to retrieve chunks for video '{video_id}'"
+            ) from exc
+
+        results = [
+            RetrievedChunk(
+                chunk_index=document.metadata.get("chunk_index", -1),
+                text=document.page_content,
+            )
+            for document in documents
+        ]
+
+        return RetrieveResponse(
+            video_id=video_id,
+            query=query,
+            results=results,
+        )
+
+    def _store_path(self, video_id: str) -> str:
+        return os.path.join(VECTOR_STORE_DIR, video_id)
