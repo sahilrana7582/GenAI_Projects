@@ -2,7 +2,7 @@ from dotenv import load_dotenv
 from typing import List
 from fastapi import FastAPI, HTTPException, status
 import logging
-from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_anthropic import ChatAnthropic
 from pydantic import BaseModel, Field
 from langchain_core.prompts import PromptTemplate
 import os
@@ -64,7 +64,7 @@ class UserPromptResponse(LLMAnswer):
 
 # LLM Model
 mode_code=os.getenv("MODEL_CODE")
-model = ChatGoogleGenerativeAI(
+model = ChatAnthropic(
     model=mode_code
 )
 
