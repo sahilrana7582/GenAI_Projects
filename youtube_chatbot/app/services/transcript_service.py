@@ -7,7 +7,7 @@ from youtube_transcript_api import (
     YouTubeTranscriptApi,
 )
 
-from app.dto.transcript import TranscriptChunkCountResponse, TranscriptResponse
+from app.dto.transcript import TranscriptChunksResponse, TranscriptResponse
 from app.exceptions.transcript import TranscriptFetchException, TranscriptNotFoundException
 
 
@@ -33,15 +33,16 @@ class TranscriptService:
             chunk_count=len(chunks),
         )
 
-    def get_transcript_chunk_count(
+    def get_transcript_chunks(
         self, video_id: str, languages: List[str]
-    ) -> TranscriptChunkCountResponse:
+    ) -> TranscriptChunksResponse:
         _, transcript_text = self._fetch_transcript(video_id, languages)
         chunks = self.chunk_transcript(transcript_text)
 
-        return TranscriptChunkCountResponse(
+        return TranscriptChunksResponse(
             video_id=video_id,
             chunk_count=len(chunks),
+            chunks=chunks,
         )
 
     def chunk_transcript(self, transcript_text: str) -> List[str]:

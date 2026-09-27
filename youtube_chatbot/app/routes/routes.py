@@ -2,8 +2,10 @@ from typing import List
 
 from fastapi import APIRouter, Query
 
-from app.dto.transcript import TranscriptChunkCountResponse, TranscriptResponse
+from app.dto.transcript import TranscriptChunksResponse, TranscriptResponse
+from app.dto.vectorstore import VectorizeRequest, VectorizeResponse
 from app.services.transcript_service import TranscriptService
+from app.services.vector_store_service import VectorStoreService
 
 
 router = APIRouter(
@@ -12,6 +14,7 @@ router = APIRouter(
 )
 
 transcript_service = TranscriptService()
+vector_store_service = VectorStoreService()
 
 
 @router.get("/transcript", response_model=TranscriptResponse)
@@ -25,12 +28,19 @@ def get_video_transcript(
     return transcript_service.get_transcript(video_id=video_id, languages=languages)
 
 
-@router.get("/chunk", response_model=TranscriptChunkCountResponse)
-def get_video_transcript_chunk_count(
+@router.get("/chunk", response_model=TranscriptChunksResponse)
+def get_video_transcript_chunks(
     video_id: str = Query(..., min_length=1, description="YouTube video ID"),
     languages: List[str] = Query(
         default=["en"],
         description="Preferred transcript languages, in priority order",
     ),
 ):
-    return transcript_service.get_transcript_chunk_count(video_id=video_id, languages=languages)
+    return transcript_service.get_transcript_chunks(video_id=video_id, languages=languages)
+
+
+@router.post("/vectorize", response_model=VectorizeResponse)
+def vectorize_video_chunks(request: VectorizeRequest):
+    return vector_store_service.vectorize_chunks(
+        video_id=request.video_id, chunks=request.chunks
+    )

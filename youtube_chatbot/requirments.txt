@@ -10,3 +10,4 @@ pydantic
 pydantic-settings
 youtube-transcript-api
 langchain_text_splitters
+faiss-cpu

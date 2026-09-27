@@ -1,3 +1,5 @@
+from typing import List
+
 from pydantic import BaseModel, Field
 
 
@@ -10,6 +12,7 @@ class TranscriptResponse(BaseModel):
     chunk_count: int = Field(description="Number of chunks the transcript splits into")
 
 
-class TranscriptChunkCountResponse(BaseModel):
+class TranscriptChunksResponse(BaseModel):
     video_id: str = Field(description="YouTube video ID")
     chunk_count: int = Field(description="Number of chunks the transcript splits into")
+    chunks: List[str] = Field(description="Transcript split into chunks")
