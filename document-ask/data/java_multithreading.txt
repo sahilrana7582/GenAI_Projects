@@ -1,0 +1,75 @@
+Multithreading
+CHAPTER 7
+
+Sophisticated computer users become impatient with the do-one-thing-at-a-time mindset of the average personal computer. Users perceive that their world is full of multiple events all happening at once, and they like to have their computers work the same way.
+
+Unfortunately, writing programs that deal with many things happening at once can be much more difficult than writing in the conventional single-threaded C and C++ style. You can write multithreaded applications in languages such as C and C++, but the level of difficulty goes up by orders of magnitude, and even then there are no assurances that vendors' libraries are thread-safe.
+
+The term thread-safe means that a given library function is implemented in such a manner that it can be executed by multiple concurrent threads of execution.
+
+The major problem with explicitly programmed thread support is that you can never be quite sure you have acquired the locks you need and released them again at the right time. If you return from a method prematurely, for instance, or if an exception is raised, for another instance, your lock has not been released; deadlock is the usual result.
+7.1 Threads at the Java Language Level
+
+Built-in support for threads provides Java programmers with a powerful tool to improve interactive performance of graphical applications. If your application needs to run animations and play music while scrolling the page and downloading a text file from a server, multithreading is the way to obtain fast, lightweight concurrency within a single process space. Threads are sometimes also called lightweight processes or execution contexts.
+
+Threads are an essential keystone of Java. The Java library provides a Thread class that supports a rich collection of methods to start a thread, run a thread, stop a thread, and check on a thread's status.
+
+Java thread support includes a sophisticated set of synchronization primitives based on the widely used monitor and condition variable paradigm introduced twenty years ago by C.A.R. Hoare and implemented in a production setting in Xerox PARC's Cedar/Mesa system. Integrating support for threads into the language makes them much easier to use and more robust. Much of the style of Java's integration of threads was modelled after Cedar and Mesa.
+
+Java's threads are pre-emptive, and depending on platform on which the Java interpreter executes, threads can also be time-sliced. On systems that don't support time-slicing, once a thread has started, the only way it will relinquish control of the processor is if another thread of a higher priority takes control of the processor. If your applications are likely to be compute-intensive, you might consider how to give up control periodically by using the yield() method to give other threads a chance to run; doing so will ensure better interactive response for graphical applications.
+7.2 Integrated Thread Synchronization
+
+Java supports multithreading at the language (syntactic) level and via support from its run-time system and thread objects. At the language level, methods within a class that are declared synchronized do not run concurrently. Such methods run under control of monitors to ensure that variables remain in a consistent state. Every class and instantiated object has its own monitor that comes into play if required.
+
+Here are a couple of code fragments from the sorting demonstration in the HotJava web browser. The main points of interest are the two methods stop and startSort, which share a common variable called kicker (it kicks off the sort thread):
+
+ 
+Copy
+Copied to Clipboard
+Error: Could not Copy
+
+public synchronized void stop() {
+              
+
+    if (kicker != null) {
+              
+
+        kicker.stop();
+              
+
+        kicker = null;
+              
+
+    }
+              
+
+}
+
+Copy
+Copied to Clipboard
+Error: Could not Copy
+
+private synchronized void startSort() {
+             
+
+    if (kicker == null || !kicker.isAlive()) {
+             
+
+        kicker = new Thread(this);
+              
+
+        kicker.start();
+            
+    }
+              
+
+}
+
+The stop and startSort methods are declared to be synchronized--they can't run concurrently, enabling them to maintain consistent state in the shared kicker variable. When a synchronized method is entered, it acquires a monitor on the current object. The monitor precludes any other synchronized methods in that object from running. When a synchronized method returns by any means, its monitor is released. Other synchronized methods within the same object are now free to run.
+
+If you're writing Java applications, you should take care to implement your classes and methods so they're thread-safe, in the same way that Java run-time libraries are thread-safe. If you wish your objects to be thread-safe, any methods that may change the values of instance variables should be declared synchronized. This ensures that only one method can change the state of an object at any time. Java monitors are re-entrant: a method can acquire the same monitor more than once, and everything will still work.
+7.3 Multithreading Support--Conclusion
+
+While other systems have provided facilities for multithreading (usually via "lightweight process" libraries), building multithreading support into the language as Java has done provides the programmer with a much more powerful tool for easily creating thread-safe multithreaded classes.
+
+Other benefits of multithreading are better interactive responsiveness and real-time behavior. Stand-alone Java run-time environments exhibit good real-time behavior. Java environments running on top of popular operating systems provide the real-time responsiveness available from the underlying platform.
