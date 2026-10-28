@@ -70,6 +70,11 @@ class State(TypedDict):
     relevant_docs: List[Document]
     ans: str
     context: str
+    issup: Literal["fully_supported", "partially_supported", "no_support"]
+    unsupported_claims: List[str]
+    revisions: int
+
+MAX_REVISIONS = 3
 
 class RetrievalDecision(BaseModel):
     should_retrieve: bool = Field(
@@ -234,6 +239,104 @@ def generate_from_context(state: State):
         "context": context,
     }
 
+class SupportDecision(BaseModel):
+    issup: Literal["fully_supported", "partially_supported", "no_support"] = Field(
+        ...,
+        description=(
+            "fully_supported: every claim in the answer is stated in the context. "
+            "partially_supported: some claims are in the context, some are not. "
+            "no_support: the answer is not backed by the context at all."
+        )
+    )
+    unsupported_claims: List[str] = Field(
+        default_factory=list,
+        description="Exact claims from the answer that are NOT stated in the context. Empty if fully_supported."
+    )
+
+issup_prompt = ChatPromptTemplate.from_messages(
+    [
+        (
+            "system",
+            "You are a strict hallucination checker.\n"
+            "You will be given a question, a context and an answer.\n"
+            "Check EVERY claim in the answer (facts, names, numbers, dates, prices, conditions) against the context.\n"
+            "Return JSON that matches this schema:\n"
+            "{{'issup': 'fully_supported' | 'partially_supported' | 'no_support', 'unsupported_claims': [string]}}\n\n"
+            "Rules:\n"
+            "- fully_supported: every claim is explicitly stated in the context (100% supported).\n"
+            "- partially_supported: at least one claim is in the context, but at least one claim is not.\n"
+            "- no_support: none of the claims are in the context, or the answer contradicts it.\n"
+            "- A claim that adds details, numbers or conditions not written in the context is unsupported.\n"
+            "- Judge only by the context. Do not use your own knowledge, even if the claim is true in the real world.\n"
+            "- The answer \"I don't know based on the provided context.\" makes no claims: return fully_supported.\n"
+            "- List every unsupported claim word for word in unsupported_claims."
+        ),
+        ("human", "Question:\n{question}\n\nContext:\n{context}\n\nAnswer:\n{answer}"),
+    ]
+)
+
+issup_llm = llm.with_structured_output(SupportDecision)
+
+def is_sup(state: State):
+    decision: SupportDecision = issup_llm.invoke(
+        issup_prompt.format_messages(
+            question=state["question"],
+            context=state["context"],
+            answer=state["ans"],
+        )
+    )
+    section(f"STEP 5  |  IS SUPPORTED?  (revision {state.get('revisions', 0)}/{MAX_REVISIONS})")
+    print(f"  Answer  : {preview(state['ans'], 200)}")
+    print(f"  Verdict : {decision.issup.upper()}")
+    for claim in decision.unsupported_claims:
+        print(f"    - unsupported: {claim}")
+    return {"issup": decision.issup, "unsupported_claims": decision.unsupported_claims}
+
+revise_prompt = ChatPromptTemplate.from_messages(
+    [
+        (
+            "system",
+            "You revise an answer so it is 100% supported by the context.\n\n"
+            "Rules:\n"
+            "- REMOVE every unsupported claim listed below. Do not rephrase them, do not replace them with guesses.\n"
+            "- Keep every claim that IS stated in the context, using the context's exact facts and numbers.\n"
+            "- Do not add any new information that is not written in the context.\n"
+            "- If nothing supported is left to answer the question, respond exactly with: "
+            "I don't know based on the provided context.\n"
+            "- Return only the revised answer."
+        ),
+        (
+            "human",
+            "Question:\n{question}\n\nContext:\n{context}\n\n"
+            "Current answer:\n{answer}\n\nUnsupported claims to remove:\n{unsupported_claims}"
+        ),
+    ]
+)
+
+def revise_ans(state: State):
+    claims = "\n".join(f"- {c}" for c in state.get("unsupported_claims", [])) or "- (none listed; remove anything not in the context)"
+    out = llm.invoke(
+        revise_prompt.format_messages(
+            question=state["question"],
+            context=state["context"],
+            answer=state["ans"],
+            unsupported_claims=claims,
+        )
+    )
+    revisions = state.get("revisions", 0) + 1
+    section(f"STEP 6  |  REVISE ANSWER  (revision {revisions}/{MAX_REVISIONS})")
+    print(f"  Old : {preview(state['ans'], 200)}")
+    print(f"  New : {preview(out.content, 200)}")
+    return {"ans": out.content, "revisions": revisions}
+
+def route_after_issup(state: State):
+    if state["issup"] == "fully_supported":
+        return "end"
+    if state.get("revisions", 0) >= MAX_REVISIONS:
+        print(f"\n  Max revisions ({MAX_REVISIONS}) reached -> stopping with a {state['issup']} answer")
+        return "end"
+    return "revise_ans"
+
 def decide_retrieval(state: State):
     decision: RetrievalDecision = should_retrieve_llm.invoke(
         decide_retrieval_prompt.format_messages(question=state["question"])
@@ -261,6 +364,8 @@ g.add_node("generate_direct", generate_direct)
 g.add_node("retrieve", retrieve)
 g.add_node("is_relevant", is_relevant)
 g.add_node("generate_from_context", generate_from_context)
+g.add_node("is_sup", is_sup)
+g.add_node("revise_ans", revise_ans)
 
 g.add_edge(START, "decide_retrieval")
 g.add_conditional_edges(
@@ -281,9 +386,19 @@ g.add_conditional_edges(
     }
 )
 
+g.add_conditional_edges(
+    "is_sup",
+    route_after_issup,
+    {
+        "revise_ans": "revise_ans",
+        "end": END
+    }
+)
+
 g.add_edge("retrieve", "is_relevant")
 g.add_edge("generate_direct", END)
-g.add_edge("generate_from_context", END)
+g.add_edge("generate_from_context", "is_sup")
+g.add_edge("revise_ans", "is_sup")
 
 app = g.compile()
 
@@ -304,14 +419,18 @@ result = app.invoke(
         "docs": [],
         "relevant_docs": [],
         "ans": "",
-        "context": ""
+        "context": "",
+        "issup": "no_support",
+        "unsupported_claims": [],
+        "revisions": 0
     }
 )
 
 section("RESULT")
 print(f"  Question : {result['question']}")
 print(f"  Answer   : {result['ans'] or '(not generated yet)'}")
-print(f"  Context   : {result['context'] or '(not generated yet)'}")
+print(f"  Support  : {result['issup'] if result['context'] else '(not checked - no documents used)'}")
+print(f"  Revisions: {result['revisions']}")
 print(f"\n  Relevant docs ({len(result['relevant_docs'])}):")
 for i, doc in enumerate(result["relevant_docs"], 1):
     print(f"\n  [{i}] {doc_label(doc)}")
