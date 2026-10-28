@@ -69,6 +69,7 @@ class State(TypedDict):
     docs: List[Document]
     relevant_docs: List[Document]
     ans: str
+    context: str
 
 class RetrievalDecision(BaseModel):
     should_retrieve: bool = Field(
@@ -97,14 +98,6 @@ should_retrieve_llm = llm.with_structured_output(RetrievalDecision)
 
 
 
-def decide_retrieval(state: State):
-    decision: RetrievalDecision = should_retrieve_llm.invoke(
-        decide_retrieval_prompt.format_messages(question=state["question"])
-    )
-    section("STEP 1  |  DECIDE RETRIEVAL")
-    print(f"  Question       : {state['question']}")
-    print(f"  Need retrieval : {'YES -> retrieve' if decision.should_retrieve else 'NO  -> answer directly'}")
-    return {"need_retrieval": decision.should_retrieve}
 
 
 direct_generation_prompt = ChatPromptTemplate.from_messages(
@@ -190,10 +183,76 @@ def is_relevant(state: State):
     print(f"\n  Kept {len(relevant_docs)} of {len(state['docs'])} chunks")
     return {"relevant_docs": relevant_docs}
 
+rag_generation_prompt = ChatPromptTemplate.from_messages(
+    [
+        (
+            "system",
+            "You are a strict retrieval-augmented question-answering system.\n"
+            "Answer the question using ONLY the information explicitly provided in the context.\n\n"
+            "Rules:\n"
+            "- Do not use your internal knowledge or external information.\n"
+            "- Do not make assumptions, infer unsupported facts, or fabricate information.\n"
+            "- If the context does not contain sufficient information to answer the question, "
+            "respond exactly with: I don't know based on the provided context.\n"
+            "- If only part of the question can be answered from the context, "
+            "respond exactly with: I don't know based on the provided context.\n"
+            "- Answer only when the context provides sufficient evidence for the complete answer.\n"
+            "- Keep the answer clear and directly relevant to the question."
+        ),
+        (
+            "human",
+            "Context:\n{context}\n\n"
+            "Question:\n{question}"
+        ),
+    ]
+)
+
+def generate_from_context(state: State):
+    context = "\n\n----\n\n".join(
+        d.page_content for d in state.get("relevant_docs", [])
+    ).strip()
+
+    section(f"STEP 4  |  GENERATE FROM CONTEXT ({len(state.get('relevant_docs', []))} chunks)")
+
+    if not context:
+        print("  No context -> I don't know.")
+        return {
+            "ans": "I don't know based on the provided context.",
+            "context": "",
+        }
+
+    out = llm.invoke(
+        rag_generation_prompt.format_messages(
+            question=state["question"],
+            context=context,
+        )
+    )
+    print("  Answer generated from the relevant chunks.")
+
+    return {
+        "ans": out.content,
+        "context": context,
+    }
+
+def decide_retrieval(state: State):
+    decision: RetrievalDecision = should_retrieve_llm.invoke(
+        decide_retrieval_prompt.format_messages(question=state["question"])
+    )
+    section("STEP 1  |  DECIDE RETRIEVAL")
+    print(f"  Question       : {state['question']}")
+    print(f"  Need retrieval : {'YES -> retrieve' if decision.should_retrieve else 'NO  -> answer directly'}")
+    return {"need_retrieval": decision.should_retrieve}
+
 def route_after_decide(state: State):
     if state["need_retrieval"]:
         return "retrieve"
     return "generate_direct"
+
+def route_after_retrieval(state: State):
+    if not state.get("relevant_docs"):
+        return "generate_direct"
+
+    return "generate_from_context"
 
 g = StateGraph(State)
 
@@ -201,6 +260,7 @@ g.add_node("decide_retrieval", decide_retrieval)
 g.add_node("generate_direct", generate_direct)
 g.add_node("retrieve", retrieve)
 g.add_node("is_relevant", is_relevant)
+g.add_node("generate_from_context", generate_from_context)
 
 g.add_edge(START, "decide_retrieval")
 g.add_conditional_edges(
@@ -212,11 +272,30 @@ g.add_conditional_edges(
     }
 )
 
-g.add_edge("generate_direct", END)
+g.add_conditional_edges(
+    "is_relevant",
+    route_after_retrieval,
+    {
+        "generate_direct": "generate_direct",
+        "generate_from_context": "generate_from_context"
+    }
+)
+
 g.add_edge("retrieve", "is_relevant")
-g.add_edge("is_relevant", END)
+g.add_edge("generate_direct", END)
+g.add_edge("generate_from_context", END)
 
 app = g.compile()
+
+# Redraw graph.png on every run so it always matches the current nodes/edges.
+# draw_mermaid_png() sends the graph structure (node names only) to mermaid.ink to render it.
+try:
+    with open("graph.png", "wb") as f:
+        f.write(app.get_graph().draw_mermaid_png())
+    print("\n  graph.png updated")
+except Exception as e:
+    print(f"\n  graph.png not updated ({e}) -> paste this into https://mermaid.live:\n")
+    print(app.get_graph().draw_mermaid())
 
 result = app.invoke(
     {
@@ -224,13 +303,15 @@ result = app.invoke(
         "need_retrieval": False,
         "docs": [],
         "relevant_docs": [],
-        "ans": ""
+        "ans": "",
+        "context": ""
     }
 )
 
 section("RESULT")
 print(f"  Question : {result['question']}")
 print(f"  Answer   : {result['ans'] or '(not generated yet)'}")
+print(f"  Context   : {result['context'] or '(not generated yet)'}")
 print(f"\n  Relevant docs ({len(result['relevant_docs'])}):")
 for i, doc in enumerate(result["relevant_docs"], 1):
     print(f"\n  [{i}] {doc_label(doc)}")
