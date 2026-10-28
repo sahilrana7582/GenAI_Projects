@@ -1,0 +1,24 @@
+# LangChain and LangGraph
+langchain
+langchain-core
+langgraph
+langchain-openai
+langchain-community
+langchain-text-splitters
+
+# Data validation
+pydantic
+pydantic-settings
+pypdf
+
+# Embeddings and vector database
+sentence-transformers
+chromadb
+faiss-cpu
+grandalf
+
+# Environment configuration
+python-dotenv
+
+# Testing
+pytest
