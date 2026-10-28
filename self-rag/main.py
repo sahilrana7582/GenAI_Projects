@@ -17,6 +17,23 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+LINE = "=" * 80
+
+
+def section(title: str):
+    print(f"\n{LINE}\n  {title}\n{LINE}")
+
+
+def doc_label(doc: Document) -> str:
+    source = os.path.basename(doc.metadata.get("source", "unknown"))
+    page = doc.metadata.get("page", 0) + 1
+    return f"{source} (page {page})"
+
+
+def preview(text: str, width: int = 90) -> str:
+    text = " ".join(text.split())
+    return text if len(text) <= width else text[:width] + "..."
+
 docs = (
     PyPDFLoader("./data/HexaAI_Products_and_Pricing_2026.pdf").load() +
     PyPDFLoader("./data/HexaAI_Employee_Handbook_2026.pdf").load() +
@@ -29,7 +46,9 @@ chunks = RecursiveCharacterTextSplitter(
 ).split_documents(docs)
 
 
-print("Total Chunks: ", len(chunks))
+section("INGESTION")
+print(f"  Pages loaded : {len(docs)}")
+print(f"  Chunks       : {len(chunks)}")
 
 llm = ChatOpenAI(
     model=os.getenv("OPENAI_MODEL"),
@@ -82,7 +101,9 @@ def decide_retrieval(state: State):
     decision: RetrievalDecision = should_retrieve_llm.invoke(
         decide_retrieval_prompt.format_messages(question=state["question"])
     )
-    print("Need retrieval:", decision.should_retrieve)
+    section("STEP 1  |  DECIDE RETRIEVAL")
+    print(f"  Question       : {state['question']}")
+    print(f"  Need retrieval : {'YES -> retrieve' if decision.should_retrieve else 'NO  -> answer directly'}")
     return {"need_retrieval": decision.should_retrieve}
 
 
@@ -112,11 +133,17 @@ def generate_direct(state: State):
             question=state["question"]
         )
     )
-
+    section("STEP 2  |  GENERATE DIRECT (no documents)")
+    print("  Answer generated from general knowledge.")
     return {"ans": out.content}
 
 def retrieve(state: State):
-    return {"docs": retriever.invoke(state["question"])}
+    docs = retriever.invoke(state["question"])
+    section(f"STEP 2  |  RETRIEVE  ({len(docs)} chunks)")
+    for i, doc in enumerate(docs, 1):
+        print(f"  [{i}] {doc_label(doc)}")
+        print(f"      {preview(doc.page_content)}")
+    return {"docs": docs}
 
 
 class RelevanceDecision(BaseModel):
@@ -147,18 +174,20 @@ relevance_llm = llm.with_structured_output(RelevanceDecision)
 
 def is_relevant(state: State):
     relevant_docs = []
-    for doc in state['docs']:
+    section("STEP 3  |  GRADE RELEVANCE")
+    for i, doc in enumerate(state['docs'], 1):
         decision: RelevanceDecision = relevance_llm.invoke(
             relevance_prompt.format_messages(
                 question=state["question"],
                 document=doc.page_content
             )
         )
-        print(f"Relevant: {decision.is_relevant} | page {doc.metadata.get('page')} | {doc.page_content[:80]!r}")
+        verdict = "RELEVANT  " if decision.is_relevant else "IRRELEVANT"
+        print(f"  [{i}] {verdict} | {doc_label(doc)}")
         if decision.is_relevant:
             relevant_docs.append(doc)
 
-    print(f"Relevant docs: {len(relevant_docs)}/{len(state['docs'])}")
+    print(f"\n  Kept {len(relevant_docs)} of {len(state['docs'])} chunks")
     return {"relevant_docs": relevant_docs}
 
 def route_after_decide(state: State):
@@ -191,7 +220,7 @@ app = g.compile()
 
 result = app.invoke(
     {
-        "question": "what are the working policies and hours?",
+        "question": "who is the CEO?",
         "need_retrieval": False,
         "docs": [],
         "relevant_docs": [],
@@ -199,5 +228,13 @@ result = app.invoke(
     }
 )
 
-print("Answer:", result["ans"])
-print("Relevant docs:", result["relevant_docs"])
+section("RESULT")
+print(f"  Question : {result['question']}")
+print(f"  Answer   : {result['ans'] or '(not generated yet)'}")
+print(f"\n  Relevant docs ({len(result['relevant_docs'])}):")
+for i, doc in enumerate(result["relevant_docs"], 1):
+    print(f"\n  [{i}] {doc_label(doc)}")
+    print("  " + "-" * 76)
+    for line in doc.page_content.splitlines():
+        print(f"    {line}")
+print(LINE)
